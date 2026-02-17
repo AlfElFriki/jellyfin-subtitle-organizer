@@ -22,57 +22,44 @@
 */
 
 mod language_parser;
+mod subdedupper;
 mod subgenerator;
 mod subgetter;
 
-use language_parser::*;
+use subdedupper::*;
 use subgenerator::*;
 use subgetter::*;
 
-use std::collections::HashMap;
-
 fn main() {
-	let args = std::env::args().skip(1).collect::<Vec<_>>();
+	let args = std::env::args()
+		.skip(1)
+		.map(|x| x.to_lowercase().trim().to_string())
+		.collect::<Vec<_>>();
+	dbg!("Arguments: {:?}", &args);
 
-	//let show_directory = PathBuf::from("/home/alfelfriki/Downloads/The Big Lebowski");
+	//let show_directory = PathBuf::from("/home/alfelfriki/Downloads/The Walking Dead");
 
-	// For now let's assume cwd is the show directory
 	let show_directory = std::env::current_dir().unwrap();
 
-	// Scan the directory for video and subtitle files
 	let (video_files, subtitle_files) = scan_directory(&show_directory);
 
-	// Match subtitle files to their corresponding video files
-	let matched_subtitles = match_subtitles(&video_files, &subtitle_files);
-
-	// Move or link subtitle files to the correct location
-	for (video_file, subtitles) in &matched_subtitles {
-		// Group subtitles by language to handle multiple subs of the same language
-		let mut lang_counts: HashMap<String, usize> = HashMap::new();
-
-		for subtitle in subtitles {
-			let lang = extract_language(subtitle, video_file);
-			let count = lang_counts.entry(lang.clone()).or_insert(0);
-			*count += 1;
-
-			let extension = subtitle.extension().unwrap().to_str().unwrap();
-			let new_subtitle_path = generate_subtitle_path(video_file, &lang, *count, extension);
-			move_or_link_subtitle(subtitle, &new_subtitle_path);
-
-			// For .idx files, also handle the corresponding .sub file
-			if extension == "idx" {
-				let sub_file = subtitle.with_extension("sub");
-				if sub_file.exists() {
-					let new_sub_path = new_subtitle_path.with_extension("sub");
-					move_or_link_subtitle(&sub_file, &new_sub_path);
-				}
-			}
-		}
+	if args.contains(&"debug".to_string()) {
+		println!("Video files found: {:?}", &video_files);
+		println!("Subtitle files found: {:?}", &subtitle_files);
 	}
 
-	if args.contains(&"DEBUG".to_string()) {
-		println!("Video files found: {:?}", video_files);
-		println!("Subtitle files found: {:?}", subtitle_files);
-		println!("Matched subtitles: {:?}", matched_subtitles);
+	if args.contains(&"generate".to_string()) {
+		let matched_subtitles = match_subtitles(&video_files, &subtitle_files);
+
+		if args.contains(&"debug".to_string()) {
+			println!("Matched subtitles: {:?}", &matched_subtitles);
+		}
+
+		generate_paths(&matched_subtitles);
+	}
+
+	if args.contains(&"dedup".to_string()) {
+		dedup_subtitles(&subtitle_files)
+			.unwrap_or_else(|e| eprintln!("Error deduping subtitles: {}", e));
 	}
 }
