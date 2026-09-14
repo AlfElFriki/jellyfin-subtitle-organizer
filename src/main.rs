@@ -41,11 +41,17 @@ fn main() {
 
 	let show_directory = std::env::current_dir().unwrap();
 
-	let (video_files, subtitle_files) = scan_directory(&show_directory);
+	let (video_files, mut subtitle_files) = scan_directory(&show_directory);
 
 	if args.contains(&"debug".to_string()) {
 		println!("Video files found: {:?}", &video_files);
 		println!("Subtitle files found: {:?}", &subtitle_files);
+	}
+
+	if args.contains(&"rename".to_string()) {
+		rename_subtitles(&subtitle_files)
+			.unwrap_or_else(|e| eprintln!("Error renaming subtitles: {}", e));
+		(_, subtitle_files) = scan_directory(&show_directory);
 	}
 
 	let matched_subtitles =
