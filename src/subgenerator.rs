@@ -1,6 +1,6 @@
+use crate::language_parser::extract_language;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use crate::language_parser::extract_language;
 
 pub fn generate_paths(matched_subtitles: &HashMap<PathBuf, Vec<PathBuf>>) {
 	// Move or link subtitle files to the correct location

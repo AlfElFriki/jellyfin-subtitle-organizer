@@ -48,9 +48,16 @@ fn main() {
 		println!("Subtitle files found: {:?}", &subtitle_files);
 	}
 
-	if args.contains(&"generate".to_string()) {
-		let matched_subtitles = match_subtitles(&video_files, &subtitle_files);
+	let matched_subtitles =
+		if args.contains(&"generate".to_string()) || args.contains(&"dedup".to_string()) {
+			Some(match_subtitles(&video_files, &subtitle_files))
+		} else {
+			None
+		};
 
+	if let Some(matched_subtitles) = &matched_subtitles
+		&& args.contains(&"generate".to_string())
+	{
 		if args.contains(&"debug".to_string()) {
 			println!("Matched subtitles: {:?}", &matched_subtitles);
 		}
@@ -59,7 +66,7 @@ fn main() {
 	}
 
 	if args.contains(&"dedup".to_string()) {
-		dedup_subtitles(&subtitle_files)
+		dedup_subtitles(matched_subtitles.as_ref().unwrap())
 			.unwrap_or_else(|e| eprintln!("Error deduping subtitles: {}", e));
 	}
 }

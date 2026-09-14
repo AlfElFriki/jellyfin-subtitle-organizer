@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-fn find_dupes(subs: &Vec<PathBuf>) -> Vec<PathBuf> {
+fn find_dupes(subs: &[PathBuf]) -> Vec<PathBuf> {
 	// We want to check for subtitles which are EXACTLY the same, so we hash the files and compare that. We return a list of the paths to the duplicate files.
 
 	let mut hashes: HashMap<String, PathBuf> = HashMap::new();
@@ -28,16 +28,15 @@ fn hash_file(path: &Path) -> String {
 	hasher.finish().to_string()
 }
 
-pub fn dedup_subtitles(subs: &Vec<PathBuf>) -> Result<(), String> {
-	let dupes = find_dupes(subs);
-	if dupes.is_empty() {
-		return Ok(());
-	}
-
-	for dupe in dupes {
-		println!("Removing duplicate subtitle: {}", dupe.display());
-		std::fs::remove_file(&dupe)
-			.map_err(|e| format!("Failed to remove file {}: {}", dupe.display(), e))?;
+pub fn dedup_subtitles(matched_subtitles: &HashMap<PathBuf, Vec<PathBuf>>) -> Result<(), String> {
+	// Deduplicate only within each video's subtitle set. Different video
+	// versions may legitimately contain byte-identical subtitles.
+	for subtitles in matched_subtitles.values() {
+		for dupe in find_dupes(subtitles) {
+			println!("Removing duplicate subtitle: {}", dupe.display());
+			std::fs::remove_file(&dupe)
+				.map_err(|e| format!("Failed to remove file {}: {}", dupe.display(), e))?;
+		}
 	}
 
 	Ok(())

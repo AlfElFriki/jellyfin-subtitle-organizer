@@ -37,8 +37,9 @@ pub fn match_subtitles(
 
 		for subtitle in subtitle_files {
 			let subtitle_file_name = subtitle.file_name().unwrap().to_str().unwrap();
-			// Check if subtitle filename starts with video filename stem
-			if subtitle_file_name.starts_with(video_stem) {
+			// A subtitle belongs to this video only when the video stem is a
+			// complete prefix, followed by Jellyfin's language separator.
+			if subtitle_file_name.starts_with(&format!("{}.", video_stem)) {
 				matched_subtitles
 					.entry(video.clone())
 					.or_default()
@@ -48,4 +49,27 @@ pub fn match_subtitles(
 	}
 
 	matched_subtitles
+}
+
+#[cfg(test)]
+mod tests {
+	use super::match_subtitles;
+	use std::path::PathBuf;
+
+	#[test]
+	fn keeps_versioned_video_subtitles_in_separate_matches() {
+		let videos = vec![
+			PathBuf::from("Movie - [4K].mkv"),
+			PathBuf::from("Movie - [Spanish].avi"),
+		];
+		let subtitles = vec![
+			PathBuf::from("Movie - [4K].eng.srt"),
+			PathBuf::from("Movie - [Spanish].spa.srt"),
+		];
+
+		let matches = match_subtitles(&videos, &subtitles);
+
+		assert_eq!(matches.get(&videos[0]), Some(&vec![subtitles[0].clone()]));
+		assert_eq!(matches.get(&videos[1]), Some(&vec![subtitles[1].clone()]));
+	}
 }
