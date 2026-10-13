@@ -1,6 +1,6 @@
 # Jellyfin Subtitle Organizer
 
-Run `jellysub` from a media directory. It scans for `.mkv`, `.mp4`, and `.avi` videos and their `.srt`, `.ass`, and `.idx` subtitles.
+Run `jellysub` from a media directory. It scans for `.mkv`, `.mp4`, and `.avi` videos and `.srt`, `.ass`, and `.idx` subtitles. Language-named files in a sibling `Subs` folder (such as `English.srt`) are matched when there is only one video in that directory.
 
 ```text
 jellysub generate [--symlink] [--delete-source]

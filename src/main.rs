@@ -26,7 +26,7 @@ mod subdedupper;
 mod subgenerator;
 mod subgetter;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use subdedupper::*;
 use subgenerator::*;
 use subgetter::*;
@@ -34,84 +34,102 @@ use subgetter::*;
 #[derive(Debug, Parser)]
 #[command(version, about = "Organize and deduplicate Jellyfin subtitles")]
 struct Cli {
-	/// Generate Jellyfin-compatible subtitle paths.
-	#[arg(long)]
-	generate: bool,
-
-	/// Remove byte-identical subtitles within each exact video version.
-	#[arg(long)]
-	dedup: bool,
-
-	/// Rename numbered subtitles to the unsuffixed name when it is available.
-	#[arg(long)]
-	rename: bool,
-
 	/// Print discovered files and subtitle matches.
-	#[arg(long)]
+	#[arg(long, global = true)]
 	debug: bool,
+
+	#[command(subcommand)]
+	command: Commands,
+}
+
+#[derive(Debug, Subcommand)]
+enum Commands {
+	/// Generate Jellyfin-compatible subtitle paths.
+	Generate {
+		/// Create symbolic links instead of moving subtitle files.
+		#[arg(long, conflicts_with = "delete_source")]
+		symlink: bool,
+
+		/// Remove empty `Subs` directories after their subtitles are moved.
+		#[arg(long)]
+		delete_source: bool,
+	},
+	/// Remove byte-identical subtitles within each exact video version.
+	Dedup,
+	/// Rename numbered subtitles to the unsuffixed name when it is available.
+	Rename,
 }
 
 fn main() {
 	let args = Cli::parse();
 
-	//let show_directory = PathBuf::from("/home/alfelfriki/Downloads/The Walking Dead");
-
 	let show_directory = std::env::current_dir().unwrap();
+	let (video_files, subtitle_files) = scan_directory(&show_directory);
 
-	let (video_files, mut subtitle_files) = scan_directory(&show_directory);
+	match args.command {
+		Commands::Generate {
+			symlink,
+			delete_source,
+		} => {
+			if args.debug {
+				println!("Video files found: {:?}", &video_files);
+				println!("Subtitle files found: {:?}", &subtitle_files);
+			}
 
-	if args.debug {
-		println!("Video files found: {:?}", &video_files);
-		println!("Subtitle files found: {:?}", &subtitle_files);
-	}
+			let matched_subtitles = match_subtitles(&video_files, &subtitle_files);
+			if args.debug {
+				println!("Matched subtitles: {:?}", &matched_subtitles);
+			}
 
-	if args.rename {
-		rename_subtitles(&subtitle_files)
-			.unwrap_or_else(|e| eprintln!("Error renaming subtitles: {}", e));
-		(_, subtitle_files) = scan_directory(&show_directory);
-	}
-
-	let matched_subtitles = if args.generate || args.dedup {
-		Some(match_subtitles(&video_files, &subtitle_files))
-	} else {
-		None
-	};
-
-	if let Some(matched_subtitles) = &matched_subtitles
-		&& args.generate
-	{
-		if args.debug {
-			println!("Matched subtitles: {:?}", &matched_subtitles);
+			generate_paths(&matched_subtitles, symlink, delete_source)
+				.unwrap_or_else(|e| eprintln!("Error generating subtitle paths: {}", e));
 		}
-
-		generate_paths(&matched_subtitles);
-	}
-
-	if args.dedup {
-		dedup_subtitles(matched_subtitles.as_ref().unwrap())
-			.unwrap_or_else(|e| eprintln!("Error deduping subtitles: {}", e));
+		Commands::Dedup => {
+			let matched_subtitles = match_subtitles(&video_files, &subtitle_files);
+			dedup_subtitles(&matched_subtitles)
+				.unwrap_or_else(|e| eprintln!("Error deduping subtitles: {}", e));
+		}
+		Commands::Rename => rename_subtitles(&subtitle_files)
+			.unwrap_or_else(|e| eprintln!("Error renaming subtitles: {}", e)),
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::Cli;
+	use super::{Cli, Commands};
 	use clap::Parser;
 
 	#[test]
-	fn parses_combinable_modes_as_flags() {
-		let args =
-			Cli::try_parse_from(["jellysub", "--generate", "--dedup", "--rename", "--debug"])
-				.unwrap();
+	fn parses_generate_options() {
+		let args = Cli::try_parse_from(["jellysub", "--debug", "generate", "--symlink"]).unwrap();
 
-		assert!(args.generate);
-		assert!(args.dedup);
-		assert!(args.rename);
 		assert!(args.debug);
+		assert!(matches!(
+			args.command,
+			Commands::Generate {
+				symlink: true,
+				delete_source: false
+			}
+		));
 	}
 
 	#[test]
-	fn rejects_unknown_modes() {
-		assert!(Cli::try_parse_from(["jellysub", "generate"]).is_err());
+	fn parses_dedup_and_rename_commands() {
+		assert!(matches!(
+			Cli::try_parse_from(["jellysub", "dedup"]).unwrap().command,
+			Commands::Dedup
+		));
+		assert!(matches!(
+			Cli::try_parse_from(["jellysub", "rename"]).unwrap().command,
+			Commands::Rename
+		));
+		assert!(Cli::try_parse_from(["jellysub", "--generate"]).is_err());
+	}
+
+	#[test]
+	fn source_removal_cannot_be_combined_with_symlinks() {
+		assert!(
+			Cli::try_parse_from(["jellysub", "generate", "--symlink", "--delete-source"]).is_err()
+		);
 	}
 }
